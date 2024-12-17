@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: "www-{{ .Values.app.name }}"
+  namespace: {{ .Values.app.namespace }}
+spec:
+  replicas: {{ .Values.app.replicas }}
+  minReadySeconds: 15
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1    
+  selector:
+    matchLabels: 
+      app: "www-{{ .Values.app.name }}"
+  template:
+    metadata:
+      labels:
+        app: "www-{{ .Values.app.name }}"
+    spec: 
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: doks.digitalocean.com/node-pool
+                operator: In
+                values:
+                - web-pool
+                - web-pool-staging
+
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - "www-{{ .Values.app.name }}"
+            topologyKey: "kubernetes.io/hostname"    
+      containers:
+        - name: "www"
+          image: "{{ .Values.app.frontend_image }}"        
+          resources:
+            requests:
+              memory: '1Mi'
+              cpu: '0.1'
+          ports:
+          - containerPort: 80        
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            privileged: true
+
+        

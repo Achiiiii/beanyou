@@ -1,0 +1,8 @@
+app:
+  name: beanyou-frontend
+
+  frontend_image: registry.digitalocean.com/registry-repo/beanyou/frontend:<FRONTEND_IMAGE_TAG>
+
+  frontend_host: beanyou.lynuxtek.com
+  namespace: beanyou
+  replicas: 2

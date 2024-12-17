@@ -1,0 +1,168 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  check_env:
+    runs-on: ubuntu-22.04
+    outputs:
+      environment: ${{ steps.branch_check.outputs.environment }}
+      image_tag: ${{ steps.branch_check.outputs.image_tag }}
+    steps:
+      - name: Show current branch
+        run: echo "Running on branch ${{ github.ref }}"
+      - name: Check Branch
+        id: branch_check
+        run: |
+          if [[ x"${{ github.ref }}" = x"refs/heads/main" ]]; then
+            echo "environment=production" >> "$GITHUB_OUTPUT"
+            echo "image_tag=production-$(date +'%Y-%m-%d.%s')" >> "$GITHUB_OUTPUT"
+            echo "branch=main" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Show output
+        run: |
+          echo "environment: ${{ steps.branch_check.outputs.environment }}"
+          echo "image_tag: ${{ steps.branch_check.outputs.image_tag }}"
+          echo "branch: ${{ steps.branch_check.outputs.branch }}"
+  build:
+    needs: [check_env]
+    runs-on: ubuntu-22.04
+    environment: ${{ needs.check_env.outputs.environment }}
+    
+    steps:
+      - name: Show env variables
+        run: |
+          echo "environment: ${{ needs.check_env.outputs.environment }}"
+          echo "image_tag: ${{ needs.check_env.outputs.image_tag }}"
+          
+      - uses: actions/checkout@v3
+      - name: Inject env settings
+        uses: cschleiden/replace-tokens@v1
+        with:
+          tokenPrefix: '<'
+          tokenSuffix: '>'
+          files: '["**/.env"]'
+        env:
+          API_ENDPOINT: ${{ vars.API_ENDPOINT }}
+          REDIRECT_URI: ${{ vars.REDIRECT_URI }}
+
+      - name: Npm run build
+        run: |
+          npm ci && npm run build
+        
+      - name: Build, tag, and push image to Digital Ocean
+        env:
+          IMAGE_TAG: ${{ needs.check_env.outputs.image_tag }}
+        run: |
+          DOCKER_BUILDKIT=1 docker build --progress=plain -t ${{ vars.CONTAINER_REGISTRY }}/${{ vars.CONTAINER_REPOSITORY }}:$IMAGE_TAG .
+          docker login -u ${{ secrets.CONTAINER_REGISTRY_TOKEN }} -p ${{ secrets.CONTAINER_REGISTRY_TOKEN }} registry.digitalocean.com      
+          docker push ${{ vars.CONTAINER_REGISTRY }}/${{ vars.CONTAINER_REPOSITORY }}:$IMAGE_TAG
+
+  
+      - name: Prepare App Version
+        id: app_version_check
+        run: |
+          old_app_version=`echo ${{ vars.APP_VERSION }} | grep -P '^v\d{8}' -o`
+          verion=`echo ${{ vars.APP_VERSION }} | grep -P '\d{2}$' -o`
+          current_date="v`date +%Y%m%d`"
+          if [[ x"$old_app_version" != x"$current_date" ]]; then
+            app_version="$current_date"01
+            echo "app_version=$app_version" >> "$GITHUB_OUTPUT"
+          else
+            new_version=`echo "$verion + 1" | bc -l`
+            padding_new_version=`printf "%02d" $new_version`
+            app_version="$current_date$padding_new_version"
+            echo "app_version=$app_version" >> "$GITHUB_OUTPUT"            
+          fi
+
+      - name: Show output
+        env:
+          IMAGE_TAG: ${{ needs.check_env.outputs.image_tag }}
+          ENVIRONMENT: ${{ needs.check_env.outputs.environment }}
+          APP_VERSION: ${{ steps.app_version_check.outputs.app_version }}
+        run: |
+          echo $IMAGE_TAG
+          echo $ENVIRONMENT   
+          echo $APP_VERSION           
+
+      - name: Update Variables
+        env:
+          IMAGE_TAG: ${{ needs.check_env.outputs.image_tag }}
+          ENVIRONMENT: ${{ needs.check_env.outputs.environment }}
+          VARIABLE_NAME: "FRONTEND_IMAGE_TAG"
+        run: |
+          echo $url
+          echo $data
+          curl -L \
+            -X PATCH \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{secrets.REPOSITORY_DISPATCH_TOKEN}}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+             https://api.github.com/repositories/740246109/environments/$ENVIRONMENT/variables/$VARIABLE_NAME \
+            -d "{\"name\":\"$VARIABLE_NAME\",\"value\":\"$IMAGE_TAG\"}"
+
+      - name: Update App Version
+        env:
+          ENVIRONMENT: ${{ needs.check_env.outputs.environment }}
+          APP_VERSION: ${{ steps.app_version_check.outputs.app_version }}
+        run: |
+          echo $url
+          echo $data
+          curl -L \
+            -X PATCH \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{secrets.REPOSITORY_DISPATCH_TOKEN}}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+             https://api.github.com/repositories/740246109/environments/$ENVIRONMENT/variables/APP_VERSION \
+            -d "{\"name\":\"APP_VERSION\",\"value\":\"$APP_VERSION\"}"
+
+  deploy:
+    needs: [check_env,build]    
+    runs-on: ubuntu-22.04
+    environment: ${{ needs.check_env.outputs.environment }}
+    steps:
+      - uses: actions/checkout@v3
+      - name: Show env variables
+        run: |
+          echo "environment: ${{ needs.check_env.outputs.environment }}"
+          echo "image_tag: ${{ needs.check_env.outputs.image_tag }}"
+
+      - name: Inject values.yaml
+        if: always()
+        uses: cschleiden/replace-tokens@v1
+        with:
+          tokenPrefix: '<'
+          tokenSuffix: '>'
+          files: '["**/helm/values.yaml"]'
+        env:
+          FRONTEND_IMAGE_TAG: ${{ vars.FRONTEND_IMAGE_TAG }}
+
+      - name: Inject Chart.yaml
+        if: always()
+        uses: cschleiden/replace-tokens@v1
+        with:
+          tokenPrefix: '<'
+          tokenSuffix: '>'
+          files: '["**/helm/Chart.yaml"]'
+        env:
+          APP_VERSION: ${{ vars.APP_VERSION }}
+
+      - name: Get Public IP (cloudflare-ip)
+        if: always()
+        id: ip
+        run: | 
+          ipv4=$(dig +short -4 txt ch whoami.cloudflare @1.0.0.1)
+          echo "ipv4=$ipv4" >> $GITHUB_OUTPUT
+
+      - name: 'Deploy'
+        uses: WyriHaximus/github-action-helm3@v3
+        with:
+          exec: helm upgrade -n beanyou beanyou ./helm/
+          kubeconfig: ${{ secrets.KUBECONFIG }}
+
+
+
+

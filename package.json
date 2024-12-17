@@ -1,0 +1,53 @@
+{
+  "name": "beanyou",
+  "version": "0.0.1",
+  "description": "A Quasar Project",
+  "productName": "Beanyou App",
+  "author": "charlie <charlie@ap-mic.com>",
+  "private": true,
+  "scripts": {
+    "lint": "eslint --ext .js,.ts,.vue ./",
+    "format": "prettier --write \"**/*.{js,ts,vue,scss,html,md,json}\" --ignore-path .gitignore",
+    "test": "echo \"No test specified\" && exit 0",
+    "dev": "quasar dev",
+    "build": "quasar build"
+  },
+  "dependencies": {
+    "@apollo/client": "^3.8.6",
+    "@line/liff": "^2.23.1",
+    "@master/css": "^1.37.8",
+    "@quasar/extras": "^1.16.4",
+    "@vue/apollo-composable": "^4.0.0-beta.11",
+    "axios": "^1.2.1",
+    "chart.js": "^4.4.1",
+    "chartjs-adapter-moment": "^1.0.1",
+    "graphql": "^16.8.1",
+    "graphql-ws": "^5.14.0",
+    "moment": "^2.30.1",
+    "pinia": "^2.0.11",
+    "quasar": "^2.6.0",
+    "querystring": "^0.2.1",
+    "vue": "^3.0.0",
+    "vue-i18n": "^9.2.2",
+    "vue-router": "^4.0.0"
+  },
+  "devDependencies": {
+    "@intlify/vite-plugin-vue-i18n": "^3.3.1",
+    "@quasar/app-vite": "^1.3.0",
+    "@quasar/quasar-app-extension-apollo": "^2.2.0-beta.2",
+    "@types/node": "^12.20.21",
+    "@typescript-eslint/eslint-plugin": "^5.10.0",
+    "@typescript-eslint/parser": "^5.10.0",
+    "autoprefixer": "^10.4.2",
+    "eslint": "^8.10.0",
+    "eslint-config-prettier": "^8.1.0",
+    "eslint-plugin-vue": "^9.0.0",
+    "prettier": "^2.5.1",
+    "typescript": "^4.5.4"
+  },
+  "engines": {
+    "node": "^18 || ^16 || ^14.19",
+    "npm": ">= 6.13.4",
+    "yarn": ">= 1.21.1"
+  }
+}
